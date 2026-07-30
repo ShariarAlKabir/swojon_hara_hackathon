@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/api";
-import { CATEGORY_OPTIONS } from "../constants/categories";
 import LocationPicker from "./LocationPicker";
 
 export default function ReportForm() {
@@ -9,7 +8,6 @@ export default function ReportForm() {
 
   const [formData, setFormData] = useState({
     category: "",
-    customCategory: "",
     description: "",
     latitude: null,
     longitude: null,
@@ -35,29 +33,16 @@ export default function ReportForm() {
   async function handleSubmit(e) {
     e.preventDefault();
 
-    const user = localStorage.getItem("moholla_user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
     if (formData.latitude === null || formData.longitude === null) {
       alert("Please select a location on the map.");
-      return;
-    }
-
-    if (formData.category === "OTHER" && !formData.customCategory.trim()) {
-      alert("Please describe your custom category.");
       return;
     }
 
     try {
       setLoading(true);
 
-      const finalCategory = formData.category === "OTHER" ? formData.customCategory.trim() : formData.category;
-
       await api.post("/reports", {
-        category: finalCategory,
+        category: formData.category,
         description: formData.description,
         latitude: formData.latitude,
         longitude: formData.longitude,
@@ -80,30 +65,14 @@ export default function ReportForm() {
       <div>
         <label>Category</label>
         <br />
-        <select name="category" value={formData.category} onChange={handleChange} required>
-          <option value="">Select a category</option>
-          {CATEGORY_OPTIONS.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <input
+          type="text"
+          name="category"
+          value={formData.category}
+          onChange={handleChange}
+          required
+        />
       </div>
-
-      {formData.category === "OTHER" && (
-        <div>
-          <label>Custom category</label>
-          <br />
-          <input
-            type="text"
-            name="customCategory"
-            value={formData.customCategory}
-            onChange={handleChange}
-            placeholder="Enter your category"
-            required
-          />
-        </div>
-      )}
 
       <br />
 

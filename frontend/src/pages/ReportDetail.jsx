@@ -1,35 +1,37 @@
-import { useEffect, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import api from "../api/api";
-import Header from "../components/Header";
 
 export default function ReportDetail() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [data, setData] = useState({ report: null, updates: [] });
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function loadReport() {
+  const loadReport = useCallback(async () => {
     try {
       const res = await api.get(`/reports/${id}`);
       setData(res.data);
     } catch (err) {
       console.error(err);
     }
-  }
+  }, [id]);
 
   useEffect(() => {
-    loadReport();
+    let isCurrent = true;
+
+    api.get(`/reports/${id}`)
+      .then((res) => {
+        if (isCurrent) setData(res.data);
+      })
+      .catch((err) => console.error(err));
+
+    return () => {
+      isCurrent = false;
+    };
   }, [id]);
 
   async function handleSupport() {
-    const user = localStorage.getItem("moholla_user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
     try {
       await api.post(`/reports/${id}/support`);
       loadReport();
@@ -39,12 +41,6 @@ export default function ReportDetail() {
   }
 
   async function handleStatus(status) {
-    const user = localStorage.getItem("moholla_user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
     try {
       await api.post(`/reports/${id}/status`, { status, note });
       setNote("");
@@ -55,12 +51,6 @@ export default function ReportDetail() {
   }
 
   async function handleUpdate() {
-    const user = localStorage.getItem("moholla_user");
-    if (!user) {
-      navigate("/login");
-      return;
-    }
-
     if (!note.trim()) return;
     try {
       setLoading(true);
@@ -78,13 +68,12 @@ export default function ReportDetail() {
 
   return (
     <div>
-      <Header />
       <div className="container detail-page">
         <div className="card">
           <Link to="/">← Back home</Link>
           <h1 className="hero-title" style={{ fontSize: "1.8rem", marginTop: "10px" }}>{data.report.category}</h1>
           <p>{data.report.description}</p>
-          <p style={{ color: "#94a3b8", marginTop: "8px" }}>
+          <p style={{ color: "#64748b", marginTop: "8px" }}>
             Ward: {data.report.ward || "Unknown"} • {data.report.supporter_count || 0} supporters
           </p>
           <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "16px" }}>

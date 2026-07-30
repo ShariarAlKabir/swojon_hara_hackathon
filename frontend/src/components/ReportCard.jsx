@@ -2,18 +2,25 @@ import { Link } from "react-router-dom";
 
 export default function ReportCard({ report }) {
   const statusClass = report.status?.replace(/\s+/g, "_").toLowerCase() || "reported";
+  const category = (report.category || "Other").replace(/_/g, " ");
+  const status = (report.status || "reported").replace(/_/g, " ");
 
   return (
     <div className="report-card">
-      <h3>{report.category}</h3>
-      <p>{report.description}</p>
-      <p style={{ color: "#64748b", marginTop: "8px" }}>
-        Ward: {report.ward || "Unknown"}
-      </p>
-      <div className={`report-chip ${statusClass}`}>{report.status || "reported"}</div>
-      <div style={{ marginTop: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="d-flex justify-content-between align-items-start gap-3">
+        <div>
+          <span className="report-category">{category}</span>
+          <h3>{report.description}</h3>
+        </div>
+        <span className={`report-chip ${statusClass}`}>{status}</span>
+      </div>
+      <div className="report-meta">
+        <span>⌖ {report.ward || "Unknown ward"}</span>
         <span>{report.supporter_count || 0} voices</span>
-        <Link to={`/reports/${report.id}`}>Open details →</Link>
+      </div>
+      <div className="report-card-footer">
+        <span>Community report</span>
+        <Link to={`/reports/${report.id}`}>View details <span aria-hidden="true">→</span></Link>
       </div>
     </div>
   );

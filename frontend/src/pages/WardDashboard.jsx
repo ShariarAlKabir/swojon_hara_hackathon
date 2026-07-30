@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import api from "../api/api";
-import Header from "../components/Header";
 
 export default function WardDashboard() {
   const [stats, setStats] = useState([]);
@@ -20,7 +19,6 @@ export default function WardDashboard() {
 
   return (
     <div>
-      <Header />
       <div className="container">
         <h1 className="hero-title">Ward dashboard</h1>
         <p className="hero-copy">A public view of where issues are concentrated and where resolution is lagging.</p>

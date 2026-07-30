@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/api";
-import Header from "../components/Header";
 
 export default function AuthPage({ mode = "login" }) {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(mode === "login");
+  const isLogin = mode === "login";
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
@@ -17,10 +16,6 @@ export default function AuthPage({ mode = "login" }) {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    setIsLogin(mode === "login");
-  }, [mode]);
 
   function handleChange(e) {
     setFormData((prev) => ({
@@ -66,11 +61,9 @@ export default function AuthPage({ mode = "login" }) {
   }
 
   return (
-    <div>
-      <Header />
-      <div className="container auth-page">
-        <div className="card auth-card">
-          <div className="auth-header">
+    <div className="container auth-page">
+      <div className="card auth-card">
+        <div className="auth-header">
           <p className="auth-eyebrow">Community access</p>
           <h1>{isLogin ? "Welcome back" : "Create an account"}</h1>
           <p>
@@ -148,17 +141,16 @@ export default function AuthPage({ mode = "login" }) {
           </button>
         </form>
 
-          <div className="auth-switch">
-            {isLogin ? (
-              <>
-                Don&apos;t have an account? <Link to="/signup">Create one</Link>
-              </>
-            ) : (
-              <>
-                Already have an account? <Link to="/login">Login</Link>
-              </>
-            )}
-          </div>
+        <div className="auth-switch">
+          {isLogin ? (
+            <>
+              Don&apos;t have an account? <Link to="/signup">Create one</Link>
+            </>
+          ) : (
+            <>
+              Already have an account? <Link to="/login">Login</Link>
+            </>
+          )}
         </div>
       </div>
     </div>
