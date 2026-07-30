@@ -69,20 +69,7 @@ Tapping any pin or card opens this page. It shows:
 
 ---
 
-### Screen 4 — Cleanup Event Page
-
-If someone taps "Organize a Cleanup" on a report, it creates a small event page:
-- Date and time
-- Location (same as the report)
-- Short description of the plan
-- "I'll Join" button
-- A visible list of how many people have joined
-
-Nothing complicated here — no chat, no messaging, just a simple sign-up list.
-
----
-
-### Screen 5 — Ward Dashboard
+### Screen 4 — Ward Dashboard
 
 A simple accountability page showing:
 - Total reports per ward
@@ -112,18 +99,6 @@ To stop fake reports, duplicate voting, and people acting on problems they have 
 - If they're too far away (e.g. more than ~2 km), the action isn't allowed
 - This means only people who are actually near a problem can vote it up, confirm it, or add testimony to it — someone across the country can view a report, but can't influence it
 - This also makes the "Trending" status mean something real: a report only trends because nearby, plausibly-affected people are backing it, not random engagement from anywhere
-
-### 3c. Familiarity (acting on a problem without being there right now)
-
-The live-location rule above solves most of the "random person from far away" problem, but it creates a smaller issue: someone who travels through a road every day for work might want to confirm or support a report later that night, from home — not just in the exact moment they're passing by. They're clearly a real stakeholder, so the app shouldn't block them just because they're not standing there at that second.
-
-**How it works:**
-- Every time someone takes a verified action (submit, confirm, update, add voice), the app already records their live location and the date, because of the relevance check above
-- If a person has done this near the same spot (within a small area, e.g. 500 meters) on **at least 3 different days**, they're marked as **"Familiar"** with that area
-- Once familiar with an area, they can act on any report inside it anytime, without needing to be physically there in the moment
-- This costs nothing extra to build — it reuses the location and timestamp data the app is already collecting, it's just one more check before deciding whether to require live GPS
-
-**In short:** live location proves you're there *right now*. Familiarity proves you're there *often*. Either one is enough to act on a report.
 
 ---
 
@@ -159,29 +134,6 @@ This is what makes Moholla-Fix different from a normal complaint app.
 
 ---
 
-## 5. Organizing Action (Cleanups)
-
-Beyond just reporting and rallying support, people can turn a report into direct action:
-- Tap "Organize a Cleanup" on any report
-- Set a date and short plan
-- Others can tap "I'll Join"
-
-This keeps the app from being purely a complaints box — it also enables people to solve small things themselves, without waiting on authorities, which fits the "civic participation" part of the track.
-
----
-
-## 6. Feature Priority (what to build first)
-
-| Priority | Features | Notes |
-|---|---|---|
-| **Must build** | Submit report, Home screen (map + list + filters), Report Detail with status timeline, Still There/Mark Fixed, Post an Update, Phone+NID signup (simulated), Geo-relevance check on actions | The app doesn't work without these |
-| **Core idea — never cut** | Add Your Voice, supporter count, Trending marker | This is what makes the pitch unique |
-| **Build if time allows** | Ward Dashboard, Familiarity (acting without live GPS) | Familiarity has a safe fallback: if there's no time, just require live GPS for every action (Option A) and mention familiarity as a designed-but-not-yet-built feature in the pitch |
-| **Build last** | Cleanup event page | Simple enough to add last if time remains |
-| **Not building this time** | Real government NID verification, SMS/OTP verification, complaint letter generator, chat/messaging | Out of scope for a 24-hour build — state this honestly in the pitch |
-
----
-
-## 7. Quick Summary (for the pitch)
+## 5. Quick Summary (for the pitch)
 
 Moholla-Fix lets people report local problems with photo proof, verify each other's reports, and rally public support around shared issues — turning scattered individual complaints into a visible, undeletable, collective voice. It also lets people organize their own fixes instead of waiting indefinitely for authorities to act.
