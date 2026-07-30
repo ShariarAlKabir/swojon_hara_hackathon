@@ -33,6 +33,12 @@ export default function ReportForm() {
   async function handleSubmit(e) {
     e.preventDefault();
 
+    if (!localStorage.getItem("moholla_token")) {
+      alert("Please log in before submitting a report.");
+      navigate("/login");
+      return;
+    }
+
     if (formData.latitude === null || formData.longitude === null) {
       alert("Please select a location on the map.");
       return;
@@ -53,7 +59,14 @@ export default function ReportForm() {
       navigate("/");
     } catch (err) {
       console.error(err);
-      alert("Failed to submit report.");
+      if (err.response?.status === 401) {
+        localStorage.removeItem("moholla_token");
+        localStorage.removeItem("moholla_user");
+        alert(err.response?.data?.message || "Please log in before submitting a report.");
+        navigate("/login");
+      } else {
+        alert(err.response?.data?.message || "Failed to submit report.");
+      }
     } finally {
       setLoading(false);
     }

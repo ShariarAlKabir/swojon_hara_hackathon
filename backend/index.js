@@ -327,7 +327,7 @@ app.get("/api/reports", async (req, res) => {
   }
 });
 
-app.post("/api/reports", async (req, res) => {
+app.post("/api/reports", requireAuth, async (req, res) => {
   try {
     const {
       category,
