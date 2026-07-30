@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import pkg from "pg";
+import crypto from "crypto";
 import "dotenv/config";
 
 const { Pool } = pkg;
@@ -17,6 +18,20 @@ const pool = new Pool({
 });
 
 async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      full_name VARCHAR(100) NOT NULL,
+      email VARCHAR(120) UNIQUE NOT NULL,
+      phone VARCHAR(20) UNIQUE NOT NULL,
+      nid VARCHAR(30) UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      ward VARCHAR(50),
+      area VARCHAR(100),
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS reports (
       id SERIAL PRIMARY KEY,
@@ -46,12 +61,79 @@ async function initDb() {
 
 initDb().catch((err) => console.error("DB init failed", err));
 
+function hashPassword(password) {
+  return crypto.createHash("sha256").update(password).digest("hex");
+}
+
 app.get("/api/health", async (req, res) => {
   try {
     const result = await pool.query("SELECT NOW()");
     res.json({ status: "ok", db_time: result.rows[0].now });
   } catch (err) {
     res.status(500).json({ status: "error", message: err.message });
+  }
+});
+
+app.post("/api/auth/signup", async (req, res) => {
+  try {
+    const { full_name, email, phone, nid, password, ward, area } = req.body;
+
+    if (!full_name || !email || !phone || !nid || !password) {
+      return res.status(400).json({ message: "Please provide full name, email, phone, NID, and password." });
+    }
+
+    const existing = await pool.query("SELECT id FROM users WHERE email = $1 OR phone = $2 OR nid = $3", [email, phone, nid]);
+    if (existing.rowCount > 0) {
+      return res.status(409).json({ message: "A user with that email, phone, or NID already exists." });
+    }
+
+    const password_hash = hashPassword(password);
+    const result = await pool.query(
+      `INSERT INTO users (full_name, email, phone, nid, password_hash, ward, area)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, full_name, email, phone, nid, ward, area, created_at`,
+      [full_name, email, phone, nid, password_hash, ward || null, area || null]
+    );
+
+    res.status(201).json({
+      message: "Account created successfully",
+      user: result.rows[0],
+      token: "demo-token"
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required." });
+    }
+
+    const result = await pool.query(
+      "SELECT id, full_name, email, phone, nid, ward, area, password_hash FROM users WHERE email = $1",
+      [email]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    const user = result.rows[0];
+    if (user.password_hash !== hashPassword(password)) {
+      return res.status(401).json({ message: "Invalid email or password." });
+    }
+
+    const { password_hash, ...safeUser } = user;
+    res.json({
+      message: "Login successful",
+      user: safeUser,
+      token: "demo-token"
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -230,31 +312,3 @@ app.get("/api/ward-dashboard", async (req, res) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
-
-app.post("/api/reports", async (req, res) => {
-  try {
-    const {
-      category,
-      description,
-      latitude,
-      longitude,
-    } = req.body;
-
-    const result = await pool.query(
-      `
-      INSERT INTO reports
-      (category, description, latitude, longitude)
-      VALUES ($1, $2, $3, $4)
-      RETURNING *;
-      `,
-      [category, description, latitude, longitude]
-    );
-
-    res.status(201).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({
-      error: err.message,
-    });
-  }
-});
