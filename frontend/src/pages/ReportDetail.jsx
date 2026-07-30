@@ -8,6 +8,7 @@ export default function ReportDetail() {
   const navigate = useNavigate();
   const [data, setData] = useState({ report: null, updates: [] });
   const [note, setNote] = useState("");
+  const [statusPhotoUrl, setStatusPhotoUrl] = useState("");
   const [activeAction, setActiveAction] = useState("");
   const [feedback, setFeedback] = useState(null);
 
@@ -80,12 +81,20 @@ export default function ReportDetail() {
   }
 
   function handleStatus(status) {
+    if (!statusPhotoUrl.trim()) {
+      setFeedback({ type: "warning", message: "Add a photo URL as proof before updating the status." });
+      return;
+    }
+
     runVerifiedAction(
       status,
-      (location) => api.post(`/reports/${id}/status`, { status, note, ...location }),
+      (location) => api.post(`/reports/${id}/status`, { status, note, photo_url: statusPhotoUrl.trim(), ...location }),
       status === "fixed" ? "The report was marked as fixed." : "The issue was confirmed as still present."
     ).then((succeeded) => {
-      if (succeeded) setNote("");
+      if (succeeded) {
+        setNote("");
+        setStatusPhotoUrl("");
+      }
     });
   }
 
@@ -123,14 +132,32 @@ export default function ReportDetail() {
               {!localStorage.getItem("moholla_token") && <Link to="/login">Log in</Link>}
             </div>
           )}
+          <div className="status-proof">
+            <label htmlFor="status-photo-url">Photo proof (required for Still There / Mark Fixed)</label>
+            <input
+              id="status-photo-url"
+              type="url"
+              value={statusPhotoUrl}
+              onChange={(e) => setStatusPhotoUrl(e.target.value)}
+              placeholder="https://…"
+            />
+          </div>
           <div className="report-actions">
             <button disabled={Boolean(activeAction)} onClick={handleSupport}>
               {activeAction === "support" ? "Verifying…" : "Add Your Voice"}
             </button>
-            <button disabled={Boolean(activeAction)} className="secondary" onClick={() => handleStatus("in_progress")}>
+            <button
+              disabled={Boolean(activeAction) || !statusPhotoUrl.trim()}
+              className="secondary"
+              onClick={() => handleStatus("in_progress")}
+            >
               {activeAction === "in_progress" ? "Verifying…" : "Still There"}
             </button>
-            <button disabled={Boolean(activeAction)} className="secondary" onClick={() => handleStatus("fixed")}>
+            <button
+              disabled={Boolean(activeAction) || !statusPhotoUrl.trim()}
+              className="secondary"
+              onClick={() => handleStatus("fixed")}
+            >
               {activeAction === "fixed" ? "Verifying…" : "Mark Fixed"}
             </button>
           </div>

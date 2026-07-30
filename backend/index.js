@@ -511,18 +511,21 @@ app.post("/api/reports/:id/support", requireAuth, requireNearbyReport, async (re
 
 app.post("/api/reports/:id/status", requireAuth, requireNearbyReport, async (req, res) => {
   try {
-    const { status, note } = req.body;
+    const { status, note, photo_url } = req.body;
     if (!["reported", "in_progress", "fixed"].includes(status)) {
       return res.status(400).json({ message: "Choose a valid report status." });
+    }
+    if (["in_progress", "fixed"].includes(status) && !photo_url) {
+      return res.status(400).json({ message: "A photo is required to mark a report as in progress or fixed." });
     }
     const { latitude, longitude, distanceKm } = req.actionLocation;
 
     const result = await pool.query(
       `UPDATE reports
-       SET status = $1
-       WHERE id = $2
+       SET status = $1, photo_url = COALESCE($2, photo_url)
+       WHERE id = $3
        RETURNING *`,
-      [status, req.params.id]
+      [status, photo_url || null, req.params.id]
     );
 
     if (result.rowCount === 0) {
@@ -531,9 +534,9 @@ app.post("/api/reports/:id/status", requireAuth, requireNearbyReport, async (req
 
     await pool.query(
       `INSERT INTO report_updates
-        (report_id, kind, note, user_id, action_latitude, action_longitude, distance_km)
-       VALUES ($1, 'status_change', $2, $3, $4, $5, $6)`,
-      [req.params.id, note || `Status updated to ${status}`, req.user.id, latitude, longitude, distanceKm]
+        (report_id, kind, note, photo_url, user_id, action_latitude, action_longitude, distance_km)
+       VALUES ($1, 'status_change', $2, $3, $4, $5, $6, $7)`,
+      [req.params.id, note || `Status updated to ${status}`, photo_url || null, req.user.id, latitude, longitude, distanceKm]
     );
 
     res.json(result.rows[0]);
