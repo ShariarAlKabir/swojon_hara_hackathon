@@ -6,6 +6,7 @@ import WardDashboard from "./pages/WardDashboard";
 import AuthPage from "./pages/AuthPage";
 import Profile from "./pages/Profile";
 import Header from "./components/Header";
+import Footer from "./components/Footer";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
         <Route path="/dashboard" element={<WardDashboard />} />
         <Route path="/profile" element={<Profile />} />
       </Routes>
+      <Footer />
     </BrowserRouter>
   );
 }

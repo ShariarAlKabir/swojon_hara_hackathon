@@ -1482,6 +1482,66 @@
   text-transform: capitalize;
 }
 
+.app-footer {
+  padding: 1.25rem 0;
+  color: #b9cec5;
+  background: #0b3024;
+  border-top: 1px solid rgb(255 255 255 / 8%);
+}
+
+.app-footer .container-xl,
+.footer-brand,
+.app-footer nav {
+  display: flex;
+  align-items: center;
+}
+
+.app-footer .container-xl {
+  justify-content: space-between;
+  gap: 1.5rem;
+}
+
+.footer-brand {
+  gap: 0.65rem;
+}
+
+.footer-brand .brand-mark {
+  width: 2rem;
+  height: 2rem;
+  font-size: 1rem;
+}
+
+.footer-brand strong,
+.footer-brand small {
+  display: block;
+}
+
+.footer-brand strong {
+  color: #fff;
+  font-size: 0.88rem;
+}
+
+.footer-brand small,
+.app-footer > .container-xl > small {
+  color: #91aa9f;
+  font-size: 0.68rem;
+}
+
+.app-footer nav {
+  gap: 1.1rem;
+}
+
+.app-footer a {
+  color: #c6d9d1;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.app-footer a:hover {
+  color: #fff;
+}
+
 @media (max-width: 991.98px) {
   .app-navbar .navbar-collapse {
     padding: 1rem 0 0.5rem;
@@ -1598,6 +1658,16 @@
 
   .oldest-report-row .report-chip {
     display: none;
+  }
+
+  .app-footer .container-xl {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .app-footer nav {
+    flex-wrap: wrap;
   }
 
   .brand-mark {
