@@ -2,12 +2,33 @@ import express from "express";
 import cors from "cors";
 import pkg from "pg";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import "dotenv/config";
 
 const { Pool } = pkg;
 const app = express();
 const TOKEN_TTL_SECONDS = 60 * 60 * 24;
 const MAX_ACTION_DISTANCE_KM = 2;
+const MAX_UPDATE_LENGTH = 1000;
+const BLOCKED_TERMS = ["badword1", "badword2"]; // stopgap list — replace/extend as needed
+
+const updatesLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many updates posted from this network. Please slow down and try again later." },
+});
+
+function violatesUpdatePolicy(text) {
+  if (!text || !text.trim()) return "A note is required.";
+  if (text.length > MAX_UPDATE_LENGTH) return `Updates must be under ${MAX_UPDATE_LENGTH} characters.`;
+  const lower = text.toLowerCase();
+  if (BLOCKED_TERMS.some((term) => lower.includes(term))) {
+    return "This update contains language that isn't allowed on the public timeline.";
+  }
+  return null;
+}
 const TOKEN_SECRET = process.env.TOKEN_SECRET || "moholla-fix-local-development-secret";
 const REPORT_CATEGORIES = new Set([
   "streetlight",
@@ -545,11 +566,12 @@ app.post("/api/reports/:id/status", requireAuth, requireNearbyReport, async (req
   }
 });
 
-app.post("/api/reports/:id/updates", requireAuth, requireNearbyReport, async (req, res) => {
+app.post("/api/reports/:id/updates", updatesLimiter, requireAuth, requireNearbyReport, async (req, res) => {
   try {
     const { note, photo_url } = req.body;
-    if (!note) {
-      return res.status(400).json({ message: "A note is required" });
+    const policyError = violatesUpdatePolicy(note);
+    if (policyError) {
+      return res.status(400).json({ message: policyError });
     }
 
     const { latitude, longitude, distanceKm } = req.actionLocation;
