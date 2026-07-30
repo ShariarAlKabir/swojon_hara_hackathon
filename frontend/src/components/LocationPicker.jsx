@@ -38,7 +38,7 @@ export default function LocationPicker({ onLocationSelect }) {
       </MapContainer>
 
       {position && (
-        <div style={{ marginTop: "15px" }}>
+        <div className="selected-location-details">
           <strong>Selected Location</strong>
 
           <p>Latitude: {position.lat}</p>

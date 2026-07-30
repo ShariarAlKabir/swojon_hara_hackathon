@@ -9,6 +9,14 @@ const app = express();
 const TOKEN_TTL_SECONDS = 60 * 60 * 24;
 const MAX_ACTION_DISTANCE_KM = 2;
 const TOKEN_SECRET = process.env.TOKEN_SECRET || "moholla-fix-local-development-secret";
+const REPORT_CATEGORIES = new Set([
+  "streetlight",
+  "garbage",
+  "pothole",
+  "open_manhole",
+  "flooding",
+  "other",
+]);
 
 app.use(cors());
 app.use(express.json());
@@ -340,6 +348,9 @@ app.post("/api/reports", requireAuth, async (req, res) => {
 
     if (!category || !description || latitude === undefined || longitude === undefined) {
       return res.status(400).json({ message: "Please provide category, description, latitude, and longitude." });
+    }
+    if (!REPORT_CATEGORIES.has(category)) {
+      return res.status(400).json({ message: "Please choose a valid report category." });
     }
 
     const result = await pool.query(

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../api/api";
 import ReportList from "../components/ReportList";
 import MapView from "../components/MapView";
+import { REPORT_CATEGORIES } from "../constants/categories";
 
 export default function Home() {
   const [reports, setReports] = useState([]);
@@ -91,12 +92,9 @@ export default function Home() {
                 <label className="form-label" htmlFor="category-filter">Category</label>
                 <select id="category-filter" className="form-select" value={filters.category} onChange={(e) => setFilters({ ...filters, category: e.target.value })}>
                   <option value="">All categories</option>
-                  <option value="pothole">Pothole</option>
-                  <option value="flooding">Flooding</option>
-                  <option value="streetlight">Streetlight</option>
-                  <option value="garbage">Garbage</option>
-                  <option value="open_manhole">Open manhole</option>
-                  <option value="other">Other</option>
+                  {REPORT_CATEGORIES.map((category) => (
+                    <option key={category.value} value={category.value}>{category.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="col-md-4">

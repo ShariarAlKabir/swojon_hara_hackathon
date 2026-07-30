@@ -597,6 +597,61 @@
   opacity: 0.6;
 }
 
+.report-form {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.report-form .action-feedback {
+  margin-top: 0;
+}
+
+.form-help {
+  display: block;
+  margin-top: 0.4rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.location-picker-shell {
+  overflow: hidden;
+  border: 1px solid #ccdcd4;
+  border-radius: 0.8rem;
+}
+
+.location-picker-shell .leaflet-container {
+  height: 360px !important;
+}
+
+.selected-location-details {
+  display: none;
+}
+
+.location-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.8rem 0.9rem;
+  color: #795516;
+  background: #fff8e6;
+  border: 1px solid #ead59e;
+  border-radius: 0.65rem;
+  font-size: 0.82rem;
+}
+
+.location-selection.selected {
+  color: #155a37;
+  background: #eaf6ee;
+  border-color: #aed5bb;
+}
+
+.location-selection span {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.74rem;
+}
+
 .stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
