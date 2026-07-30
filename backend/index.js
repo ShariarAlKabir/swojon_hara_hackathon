@@ -112,7 +112,8 @@ async function initDb() {
       ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id),
       ADD COLUMN IF NOT EXISTS action_latitude DOUBLE PRECISION,
       ADD COLUMN IF NOT EXISTS action_longitude DOUBLE PRECISION,
-      ADD COLUMN IF NOT EXISTS distance_km DOUBLE PRECISION
+      ADD COLUMN IF NOT EXISTS distance_km DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS status_value TEXT
   `);
 
   await pool.query(`
@@ -126,6 +127,19 @@ async function initDb() {
       distance_km DOUBLE PRECISION NOT NULL,
       created_at TIMESTAMP DEFAULT NOW(),
       UNIQUE (report_id, user_id)
+    )
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      report_id INT REFERENCES reports(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      message TEXT NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (user_id, report_id, type)
     )
   `);
 }
@@ -328,6 +342,108 @@ app.post("/api/auth/login", async (req, res) => {
       user: safeUser,
       token: createToken(user.id),
     });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get("/api/profile", requireAuth, async (req, res) => {
+  try {
+    const [userResult, submittedResult, fixedResult] = await Promise.all([
+      pool.query(
+        `SELECT id, full_name, email, phone, ward, area, created_at
+         FROM users
+         WHERE id = $1`,
+        [req.user.id]
+      ),
+      pool.query(
+        `SELECT id, category, description, photo_url, latitude, longitude, status,
+          ward, supporter_count, created_at
+         FROM reports
+         WHERE reporter_user_id = $1
+         ORDER BY created_at DESC`,
+        [req.user.id]
+      ),
+      pool.query(
+        `SELECT DISTINCT ON (r.id)
+          r.id, r.category, r.description, r.photo_url, r.latitude, r.longitude,
+          r.status, r.ward, r.supporter_count, r.created_at,
+          ru.created_at AS fixed_at
+         FROM report_updates ru
+         JOIN reports r ON r.id = ru.report_id
+         WHERE ru.user_id = $1
+           AND ru.kind = 'status_change'
+           AND (ru.status_value = 'fixed' OR (ru.status_value IS NULL AND ru.note ILIKE '%fixed%'))
+         ORDER BY r.id, ru.created_at DESC`,
+        [req.user.id]
+      ),
+    ]);
+
+    res.json({
+      user: userResult.rows[0],
+      submitted_reports: submittedResult.rows,
+      fixed_reports: fixedResult.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.put("/api/profile", requireAuth, async (req, res) => {
+  try {
+    const fullName = String(req.body.full_name || "").trim();
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const phone = String(req.body.phone || "").trim();
+    const ward = String(req.body.ward || "").trim() || null;
+    const area = String(req.body.area || "").trim() || null;
+
+    if (!fullName || !email || !phone) {
+      return res.status(400).json({ message: "Name, email, and phone are required." });
+    }
+
+    const result = await pool.query(
+      `UPDATE users
+       SET full_name = $1, email = $2, phone = $3, ward = $4, area = $5
+       WHERE id = $6
+       RETURNING id, full_name, email, phone, ward, area, created_at`,
+      [fullName, email, phone, ward, area, req.user.id]
+    );
+
+    res.json({ message: "Profile updated successfully", user: result.rows[0] });
+  } catch (err) {
+    if (err.code === "23505") {
+      return res.status(409).json({ message: "That email or phone number is already in use." });
+    }
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.get("/api/notifications", requireAuth, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT n.id, n.report_id, n.type, n.message, n.is_read, n.created_at,
+        r.description, r.category
+       FROM notifications n
+       LEFT JOIN reports r ON r.id = n.report_id
+       WHERE n.user_id = $1
+       ORDER BY n.created_at DESC
+       LIMIT 30`,
+      [req.user.id]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.patch("/api/notifications/read", requireAuth, async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE notifications SET is_read = TRUE WHERE user_id = $1 AND is_read = FALSE",
+      [req.user.id]
+    );
+    res.json({ message: "Notifications marked as read" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -555,12 +671,23 @@ app.post("/api/reports/:id/status", requireAuth, requireNearbyReport, async (req
 
     await pool.query(
       `INSERT INTO report_updates
-        (report_id, kind, note, photo_url, user_id, action_latitude, action_longitude, distance_km)
-       VALUES ($1, 'status_change', $2, $3, $4, $5, $6, $7)`,
-      [req.params.id, note || `Status updated to ${status}`, photo_url || null, req.user.id, latitude, longitude, distanceKm]
+        (report_id, kind, note, photo_url, user_id, action_latitude, action_longitude, distance_km, status_value)
+       VALUES ($1, 'status_change', $2, $3, $4, $5, $6, $7, $8)`,
+      [req.params.id, note || `Status updated to ${status}`, photo_url || null, req.user.id, latitude, longitude, distanceKm, status]
     );
 
-    res.json(result.rows[0]);
+    const report = result.rows[0];
+    if (status === "fixed" && report.reporter_user_id && report.reporter_user_id !== req.user.id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, report_id, type, message)
+         VALUES ($1, $2, 'report_fixed', 'Your report has been marked as fixed.')
+         ON CONFLICT (user_id, report_id, type)
+         DO UPDATE SET message = EXCLUDED.message, is_read = FALSE, created_at = NOW()`,
+        [report.reporter_user_id, report.id]
+      );
+    }
+
+    res.json(report);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

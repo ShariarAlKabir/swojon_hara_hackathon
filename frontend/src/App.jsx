@@ -4,6 +4,7 @@ import CreateReport from "./pages/CreateReport";
 import ReportDetail from "./pages/ReportDetail";
 import WardDashboard from "./pages/WardDashboard";
 import AuthPage from "./pages/AuthPage";
+import Profile from "./pages/Profile";
 import Header from "./components/Header";
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/report/new" element={<CreateReport />} />
         <Route path="/reports/:id" element={<ReportDetail />} />
         <Route path="/dashboard" element={<WardDashboard />} />
+        <Route path="/profile" element={<Profile />} />
       </Routes>
     </BrowserRouter>
   );

@@ -16,6 +16,8 @@ export default function AuthPage({ mode = "login" }) {
   });
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+  const [showLoginSuccess, setShowLoginSuccess] = useState(false);
+  const [showSignupSuccess, setShowSignupSuccess] = useState(false);
 
   function handleChange(e) {
     setFormData((prev) => ({
@@ -46,12 +48,19 @@ export default function AuthPage({ mode = "login" }) {
       const res = await api.post(endpoint, payload);
       if (res.data.user) {
         localStorage.setItem("moholla_user", JSON.stringify(res.data.user));
+        window.dispatchEvent(new Event("moholla-auth-change"));
       }
       if (res.data.token) {
         localStorage.setItem("moholla_token", res.data.token);
       }
 
-      setMessage(res.data.message || "Success");
+      if (isLogin) {
+        setShowLoginSuccess(true);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } else {
+        setShowSignupSuccess(true);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
       navigate("/");
     } catch (err) {
       setMessage(err.response?.data?.message || "Authentication failed");
@@ -62,6 +71,19 @@ export default function AuthPage({ mode = "login" }) {
 
   return (
     <div className="container auth-page">
+      {showLoginSuccess && (
+        <div className="success-toast" role="status" aria-live="polite">
+          <span className="success-toast-icon" aria-hidden="true">✓</span>
+          Login successful
+        </div>
+      )}
+      {showSignupSuccess && (
+        <div className="success-toast" role="status" aria-live="polite">
+          <span className="success-toast-icon" aria-hidden="true">✓</span>
+          Account created successfully
+        </div>
+      )}
+
       <div className="card auth-card">
         <div className="auth-header">
           <p className="auth-eyebrow">Community access</p>
