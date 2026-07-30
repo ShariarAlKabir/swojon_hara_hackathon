@@ -500,7 +500,7 @@
 .card select {
   width: 100%;
   padding: 0.75rem;
-  background: #fff;
+  background-color: #fff;
   border: 1px solid #ccdcd4;
   border-radius: 0.65rem;
 }
@@ -604,6 +604,32 @@
 
 .report-form .action-feedback {
   margin-top: 0;
+  scroll-margin-top: 100px;
+  outline: none;
+}
+
+.category-select-wrap {
+  position: relative;
+}
+
+.category-select-wrap::after {
+  position: absolute;
+  top: 50%;
+  right: 1rem;
+  z-index: 1;
+  color: var(--primary);
+  content: "▼";
+  font-size: 0.72rem;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.category-select-wrap .form-select {
+  min-height: 52px;
+  padding-right: 3rem;
+  background-image: none;
+  cursor: pointer;
+  font-weight: 650;
 }
 
 .form-help {

@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import LocationPicker from "./LocationPicker";
 import { REPORT_CATEGORIES } from "../constants/categories";
+import { getLiveLocation } from "../utils/location";
 
 export default function ReportForm() {
   const navigate = useNavigate();
@@ -16,7 +17,15 @@ export default function ReportForm() {
 
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
-  const isLoggedIn = Boolean(localStorage.getItem("moholla_token"));
+  const feedbackRef = useRef(null);
+
+  function showFeedback(nextFeedback) {
+    setFeedback(nextFeedback);
+    window.requestAnimationFrame(() => {
+      feedbackRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      feedbackRef.current?.focus({ preventScroll: true });
+    });
+  }
 
   function handleChange(e) {
     setFormData({
@@ -38,7 +47,7 @@ export default function ReportForm() {
     setFeedback(null);
 
     if (!localStorage.getItem("moholla_token")) {
-      setFeedback({
+      showFeedback({
         type: "warning",
         message: "You need to log in before submitting a report. This keeps community reports accountable.",
         needsLogin: true,
@@ -46,8 +55,18 @@ export default function ReportForm() {
       return;
     }
 
+    if (!formData.category) {
+      showFeedback({ type: "warning", message: "Select an issue category before submitting." });
+      return;
+    }
+
+    if (!formData.description.trim()) {
+      showFeedback({ type: "warning", message: "Describe the issue before submitting." });
+      return;
+    }
+
     if (formData.latitude === null || formData.longitude === null) {
-      setFeedback({
+      showFeedback({
         type: "warning",
         message: "Choose the issue location on the map before submitting.",
       });
@@ -56,17 +75,24 @@ export default function ReportForm() {
 
     try {
       setLoading(true);
+      showFeedback({
+        type: "info",
+        message: "Verifying your live location against the selected report location…",
+      });
+      const liveLocation = await getLiveLocation();
 
       await api.post("/reports", {
         category: formData.category,
         description: formData.description,
         latitude: formData.latitude,
         longitude: formData.longitude,
+        verification_latitude: liveLocation.latitude,
+        verification_longitude: liveLocation.longitude,
       });
 
-      setFeedback({
+      showFeedback({
         type: "success",
-        message: "Report submitted successfully. Taking you back to community reports…",
+        message: "Location verified and report submitted. Taking you back to community reports…",
       });
       window.setTimeout(() => navigate("/"), 700);
     } catch (err) {
@@ -74,15 +100,15 @@ export default function ReportForm() {
       if (err.response?.status === 401) {
         localStorage.removeItem("moholla_token");
         localStorage.removeItem("moholla_user");
-        setFeedback({
+        showFeedback({
           type: "warning",
           message: err.response?.data?.message || "Your session expired. Log in again to submit this report.",
           needsLogin: true,
         });
       } else {
-        setFeedback({
+        showFeedback({
           type: "danger",
-          message: err.response?.data?.message || "The report could not be submitted. Check your connection and try again.",
+          message: err.response?.data?.message || err.message || "The report could not be submitted. Check your connection and try again.",
         });
       }
     } finally {
@@ -91,16 +117,14 @@ export default function ReportForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="report-form">
-      {!isLoggedIn && !feedback && (
-        <div className="action-feedback warning" role="status">
-          <span>You must be logged in to submit a verified community report.</span>
-          <Link to="/login">Log in</Link>
-        </div>
-      )}
-
+    <form onSubmit={handleSubmit} className="report-form" noValidate>
       {feedback && (
-        <div className={`action-feedback ${feedback.type}`} role="alert">
+        <div
+          ref={feedbackRef}
+          className={`action-feedback ${feedback.type}`}
+          role="alert"
+          tabIndex="-1"
+        >
           <span>{feedback.message}</span>
           {feedback.needsLogin && <Link to="/login">Log in now</Link>}
         </div>
@@ -108,19 +132,20 @@ export default function ReportForm() {
 
       <div>
         <label className="form-label" htmlFor="report-category">What type of issue is this?</label>
-        <select
-          id="report-category"
-          className="form-select"
-          name="category"
-          value={formData.category}
-          onChange={handleChange}
-          required
-        >
-          <option value="" disabled>Select a category</option>
-          {REPORT_CATEGORIES.map((category) => (
-            <option key={category.value} value={category.value}>{category.label}</option>
-          ))}
-        </select>
+        <div className="category-select-wrap">
+          <select
+            id="report-category"
+            className="form-select"
+            name="category"
+            value={formData.category}
+            onChange={handleChange}
+          >
+            <option value="" disabled>Choose an issue category</option>
+            {REPORT_CATEGORIES.map((category) => (
+              <option key={category.value} value={category.value}>{category.label}</option>
+            ))}
+          </select>
+        </div>
         <small className="form-help">Choose the closest match so neighbors can find and filter your report.</small>
       </div>
 
@@ -134,14 +159,16 @@ export default function ReportForm() {
           value={formData.description}
           onChange={handleChange}
           placeholder="What happened, how long has it been there, and who is affected?"
-          required
         />
         <small className="form-help">Be specific, but do not include anyone’s private information.</small>
       </div>
 
       <div>
         <label className="form-label">Where is the issue?</label>
-        <p className="form-help mb-2">Tap the map to place the marker at the problem location.</p>
+        <p className="form-help mb-2">
+          Tap the map to place the issue marker. When you submit, your current GPS location
+          will be checked to confirm you are within 2 km.
+        </p>
         <div className="location-picker-shell">
           <LocationPicker onLocationSelect={handleLocationSelect} />
         </div>
@@ -155,7 +182,7 @@ export default function ReportForm() {
       </div>
 
       <button type="submit" disabled={loading}>
-        {loading ? "Submitting..." : "Submit Report"}
+        {loading ? "Verifying location…" : "Submit Report"}
       </button>
     </form>
   );

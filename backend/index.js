@@ -55,8 +55,20 @@ async function initDb() {
       status TEXT DEFAULT 'reported',
       ward TEXT DEFAULT 'Unknown',
       supporter_count INT DEFAULT 0,
+      reporter_user_id INT REFERENCES users(id),
+      verification_latitude DOUBLE PRECISION,
+      verification_longitude DOUBLE PRECISION,
+      verification_distance_km DOUBLE PRECISION,
       created_at TIMESTAMP DEFAULT NOW()
     )
+  `);
+
+  await pool.query(`
+    ALTER TABLE reports
+      ADD COLUMN IF NOT EXISTS reporter_user_id INT REFERENCES users(id),
+      ADD COLUMN IF NOT EXISTS verification_latitude DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS verification_longitude DOUBLE PRECISION,
+      ADD COLUMN IF NOT EXISTS verification_distance_km DOUBLE PRECISION
   `);
 
   await pool.query(`
@@ -343,6 +355,8 @@ app.post("/api/reports", requireAuth, async (req, res) => {
       photo_url,
       latitude,
       longitude,
+      verification_latitude,
+      verification_longitude,
       ward = "Unknown",
     } = req.body;
 
@@ -353,14 +367,75 @@ app.post("/api/reports", requireAuth, async (req, res) => {
       return res.status(400).json({ message: "Please choose a valid report category." });
     }
 
-    const result = await pool.query(
-      `INSERT INTO reports (category, description, photo_url, latitude, longitude, status, ward, supporter_count)
-       VALUES ($1, $2, $3, $4, $5, 'reported', $6, 0)
-       RETURNING *`,
-      [category, description, photo_url || null, latitude, longitude, ward]
-    );
+    const reportLocation = parseCoordinates({ latitude, longitude });
+    const verificationLocation = parseCoordinates({
+      latitude: verification_latitude,
+      longitude: verification_longitude,
+    });
+    if (!reportLocation || !verificationLocation) {
+      return res.status(400).json({
+        code: "LOCATION_REQUIRED",
+        message: "A valid selected location and current GPS location are required.",
+      });
+    }
 
-    res.status(201).json(result.rows[0]);
+    const verificationDistanceKm = distanceInKm(
+      verificationLocation.latitude,
+      verificationLocation.longitude,
+      reportLocation.latitude,
+      reportLocation.longitude
+    );
+    if (verificationDistanceKm > MAX_ACTION_DISTANCE_KM) {
+      return res.status(403).json({
+        code: "TOO_FAR",
+        message: `The selected issue is ${verificationDistanceKm.toFixed(1)} km from your current location. You must be within ${MAX_ACTION_DISTANCE_KM} km to report it.`,
+        distance_km: Number(verificationDistanceKm.toFixed(3)),
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const result = await client.query(
+        `INSERT INTO reports
+          (category, description, photo_url, latitude, longitude, status, ward, supporter_count,
+           reporter_user_id, verification_latitude, verification_longitude, verification_distance_km)
+         VALUES ($1, $2, $3, $4, $5, 'reported', $6, 0, $7, $8, $9, $10)
+         RETURNING *`,
+        [
+          category,
+          description.trim(),
+          photo_url || null,
+          reportLocation.latitude,
+          reportLocation.longitude,
+          ward,
+          req.user.id,
+          verificationLocation.latitude,
+          verificationLocation.longitude,
+          verificationDistanceKm,
+        ]
+      );
+
+      await client.query(
+        `INSERT INTO report_updates
+          (report_id, kind, note, user_id, action_latitude, action_longitude, distance_km)
+         VALUES ($1, 'created', 'Report submitted with verified location', $2, $3, $4, $5)`,
+        [
+          result.rows[0].id,
+          req.user.id,
+          verificationLocation.latitude,
+          verificationLocation.longitude,
+          verificationDistanceKm,
+        ]
+      );
+      await client.query("COMMIT");
+      res.status(201).json(result.rows[0]);
+    } catch (err) {
+      await client.query("ROLLBACK");
+      throw err;
+    } finally {
+      client.release();
+    }
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
