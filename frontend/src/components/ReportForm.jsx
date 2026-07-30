@@ -4,16 +4,20 @@ import api from "../api/api";
 import LocationPicker from "./LocationPicker";
 import { REPORT_CATEGORIES } from "../constants/categories";
 import { getLiveLocation } from "../utils/location";
+import PhotoUpload from "./PhotoUpload";
 
 export default function ReportForm() {
   const navigate = useNavigate();
+  const currentUser = JSON.parse(localStorage.getItem("moholla_user") || "null");
 
   const [formData, setFormData] = useState({
     category: "",
     description: "",
+    ward: currentUser?.ward || "",
     latitude: null,
     longitude: null,
   });
+  const [photo, setPhoto] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState(null);
@@ -65,6 +69,16 @@ export default function ReportForm() {
       return;
     }
 
+    if (!formData.ward.trim()) {
+      showFeedback({ type: "warning", message: "Enter the ward where this issue is located." });
+      return;
+    }
+
+    if (!photo) {
+      showFeedback({ type: "warning", message: "Upload a photo of the issue before submitting." });
+      return;
+    }
+
     if (formData.latitude === null || formData.longitude === null) {
       showFeedback({
         type: "warning",
@@ -84,6 +98,8 @@ export default function ReportForm() {
       await api.post("/reports", {
         category: formData.category,
         description: formData.description,
+        photo_url: photo,
+        ward: formData.ward,
         latitude: formData.latitude,
         longitude: formData.longitude,
         verification_latitude: liveLocation.latitude,
@@ -162,6 +178,28 @@ export default function ReportForm() {
         />
         <small className="form-help">Be specific, but do not include anyone’s private information.</small>
       </div>
+
+      <div>
+        <label className="form-label" htmlFor="report-ward">Which ward is it in?</label>
+        <input
+          id="report-ward"
+          className="form-control"
+          name="ward"
+          value={formData.ward}
+          onChange={handleChange}
+          placeholder="e.g. 12 or Ward 12"
+        />
+        <small className="form-help">This connects the report to the public ward dashboard.</small>
+      </div>
+
+      <PhotoUpload
+        id="report-photo"
+        label="Photo proof"
+        value={photo}
+        onChange={setPhoto}
+        required
+        helpText="Take a photo or choose one from your device (maximum 3 MB)."
+      />
 
       <div>
         <label className="form-label">Where is the issue?</label>

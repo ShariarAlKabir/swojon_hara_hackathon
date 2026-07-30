@@ -40,7 +40,7 @@ const REPORT_CATEGORIES = new Set([
 ]);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "6mb" }));
 
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
@@ -142,6 +142,19 @@ async function initDb() {
       UNIQUE (user_id, report_id, type)
     )
   `);
+
+  await pool.query(`
+    UPDATE reports r
+    SET ward = CASE
+      WHEN u.ward ~* '^ward[[:space:]]+' THEN INITCAP(u.ward)
+      ELSE 'Ward ' || u.ward
+    END
+    FROM users u
+    WHERE r.reporter_user_id = u.id
+      AND (r.ward IS NULL OR TRIM(r.ward) = '' OR LOWER(r.ward) = 'unknown')
+      AND u.ward IS NOT NULL
+      AND TRIM(u.ward) <> ''
+  `);
 }
 
 initDb().catch((err) => console.error("DB init failed", err));
@@ -218,6 +231,17 @@ function parseCoordinates(body) {
     return null;
   }
   return { latitude, longitude };
+}
+
+function normalizeWard(value) {
+  const ward = String(value || "").trim();
+  if (!ward) return "Unknown";
+  return /^ward\s+/i.test(ward) ? `Ward ${ward.replace(/^ward\s+/i, "").trim()}` : `Ward ${ward}`;
+}
+
+function isValidPhoto(value) {
+  if (typeof value !== "string" || value.length > 5_000_000) return false;
+  return value.startsWith("data:image/") || /^https?:\/\//i.test(value);
 }
 
 function distanceInKm(fromLat, fromLng, toLat, toLng) {
@@ -494,14 +518,17 @@ app.post("/api/reports", requireAuth, async (req, res) => {
       longitude,
       verification_latitude,
       verification_longitude,
-      ward = "Unknown",
+      ward,
     } = req.body;
 
-    if (!category || !description || latitude === undefined || longitude === undefined) {
-      return res.status(400).json({ message: "Please provide category, description, latitude, and longitude." });
+    if (!category || !description || !photo_url || latitude === undefined || longitude === undefined) {
+      return res.status(400).json({ message: "Please provide category, description, photo proof, latitude, and longitude." });
     }
     if (!REPORT_CATEGORIES.has(category)) {
       return res.status(400).json({ message: "Please choose a valid report category." });
+    }
+    if (!isValidPhoto(photo_url)) {
+      return res.status(400).json({ message: "Upload a valid image smaller than 3 MB." });
     }
 
     const reportLocation = parseCoordinates({ latitude, longitude });
@@ -545,7 +572,7 @@ app.post("/api/reports", requireAuth, async (req, res) => {
           photo_url || null,
           reportLocation.latitude,
           reportLocation.longitude,
-          ward,
+          normalizeWard(ward || req.user.ward),
           req.user.id,
           verificationLocation.latitude,
           verificationLocation.longitude,
@@ -655,6 +682,9 @@ app.post("/api/reports/:id/status", requireAuth, requireNearbyReport, async (req
     if (["in_progress", "fixed"].includes(status) && !photo_url) {
       return res.status(400).json({ message: "A photo is required to mark a report as in progress or fixed." });
     }
+    if (photo_url && !isValidPhoto(photo_url)) {
+      return res.status(400).json({ message: "Upload a valid image smaller than 3 MB." });
+    }
     const { latitude, longitude, distanceKm } = req.actionLocation;
 
     const result = await pool.query(
@@ -700,6 +730,9 @@ app.post("/api/reports/:id/updates", updatesLimiter, requireAuth, requireNearbyR
     if (policyError) {
       return res.status(400).json({ message: policyError });
     }
+    if (photo_url && !isValidPhoto(photo_url)) {
+      return res.status(400).json({ message: "Upload a valid image smaller than 3 MB." });
+    }
 
     const { latitude, longitude, distanceKm } = req.actionLocation;
     const result = await pool.query(
@@ -718,16 +751,47 @@ app.post("/api/reports/:id/updates", updatesLimiter, requireAuth, requireNearbyR
 
 app.get("/api/ward-dashboard", async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT ward,
-        COUNT(*) AS total_reports,
-        SUM(CASE WHEN status = 'fixed' THEN 1 ELSE 0 END) AS resolved_reports
-      FROM reports
-      GROUP BY ward
-      ORDER BY total_reports DESC
-    `);
+    const [wardsResult, oldestResult] = await Promise.all([
+      pool.query(`
+        SELECT
+          COALESCE(NULLIF(TRIM(r.ward), ''), 'Unknown') AS ward,
+          COUNT(*)::INT AS total_reports,
+          COUNT(*) FILTER (WHERE r.status = 'fixed')::INT AS resolved_reports,
+          COUNT(*) FILTER (WHERE r.status <> 'fixed')::INT AS unresolved_reports,
+          ROUND(
+            100.0 * COUNT(*) FILTER (WHERE r.status = 'fixed') / NULLIF(COUNT(*), 0),
+            1
+          ) AS resolution_percentage,
+          ROUND(AVG(
+            EXTRACT(EPOCH FROM (fixed_update.fixed_at - r.created_at)) / 86400
+          ) FILTER (WHERE fixed_update.fixed_at IS NOT NULL)::NUMERIC, 1) AS average_fix_days
+        FROM reports r
+        LEFT JOIN LATERAL (
+          SELECT MIN(ru.created_at) AS fixed_at
+          FROM report_updates ru
+          WHERE ru.report_id = r.id
+            AND ru.kind = 'status_change'
+            AND (ru.status_value = 'fixed' OR (ru.status_value IS NULL AND ru.note ILIKE '%fixed%'))
+        ) fixed_update ON TRUE
+        GROUP BY COALESCE(NULLIF(TRIM(r.ward), ''), 'Unknown')
+        ORDER BY total_reports DESC, ward ASC
+      `),
+      pool.query(`
+        SELECT id, category, description, status,
+          COALESCE(NULLIF(TRIM(ward), ''), 'Unknown') AS ward,
+          supporter_count, created_at,
+          FLOOR(EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400)::INT AS days_open
+        FROM reports
+        WHERE status <> 'fixed'
+        ORDER BY created_at ASC
+        LIMIT 10
+      `),
+    ]);
 
-    res.json(result.rows);
+    res.json({
+      wards: wardsResult.rows,
+      oldest_unresolved: oldestResult.rows,
+    });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

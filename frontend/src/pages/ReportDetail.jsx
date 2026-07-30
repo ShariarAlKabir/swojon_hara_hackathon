@@ -2,13 +2,15 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import api from "../api/api";
 import { getLiveLocation } from "../utils/location";
+import PhotoUpload from "../components/PhotoUpload";
 
 export default function ReportDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState({ report: null, updates: [] });
   const [note, setNote] = useState("");
-  const [statusPhotoUrl, setStatusPhotoUrl] = useState("");
+  const [statusPhoto, setStatusPhoto] = useState("");
+  const [updatePhoto, setUpdatePhoto] = useState("");
   const [activeAction, setActiveAction] = useState("");
   const [feedback, setFeedback] = useState(null);
 
@@ -81,19 +83,19 @@ export default function ReportDetail() {
   }
 
   function handleStatus(status) {
-    if (!statusPhotoUrl.trim()) {
-      setFeedback({ type: "warning", message: "Add a photo URL as proof before updating the status." });
+    if (!statusPhoto) {
+      setFeedback({ type: "warning", message: "Upload a photo as proof before updating the status." });
       return;
     }
 
     runVerifiedAction(
       status,
-      (location) => api.post(`/reports/${id}/status`, { status, note, photo_url: statusPhotoUrl.trim(), ...location }),
+      (location) => api.post(`/reports/${id}/status`, { status, note, photo_url: statusPhoto, ...location }),
       status === "fixed" ? "The report was marked as fixed." : "The issue was confirmed as still present."
     ).then((succeeded) => {
       if (succeeded) {
         setNote("");
-        setStatusPhotoUrl("");
+        setStatusPhoto("");
       }
     });
   }
@@ -106,10 +108,13 @@ export default function ReportDetail() {
 
     runVerifiedAction(
       "update",
-      (location) => api.post(`/reports/${id}/updates`, { note, ...location }),
+      (location) => api.post(`/reports/${id}/updates`, { note, photo_url: updatePhoto || null, ...location }),
       "Your verified update was added to the public timeline."
     ).then((succeeded) => {
-      if (succeeded) setNote("");
+      if (succeeded) {
+        setNote("");
+        setUpdatePhoto("");
+      }
     });
   }
 
@@ -122,6 +127,7 @@ export default function ReportDetail() {
           <Link to="/">← Back home</Link>
           <h1 className="hero-title" style={{ fontSize: "1.8rem", marginTop: "10px" }}>{data.report.category}</h1>
           <p>{data.report.description}</p>
+          {data.report.photo_url && <img className="report-proof-image" src={data.report.photo_url} alt="Photo proof for this report" />}
           <p style={{ color: "#64748b", marginTop: "8px" }}>
             Ward: {data.report.ward || "Unknown"} • {data.report.supporter_count || 0} supporters
           </p>
@@ -132,29 +138,27 @@ export default function ReportDetail() {
               {!localStorage.getItem("moholla_token") && <Link to="/login">Log in</Link>}
             </div>
           )}
-          <div className="status-proof">
-            <label htmlFor="status-photo-url">Photo proof (required for Still There / Mark Fixed)</label>
-            <input
-              id="status-photo-url"
-              type="url"
-              value={statusPhotoUrl}
-              onChange={(e) => setStatusPhotoUrl(e.target.value)}
-              placeholder="https://…"
-            />
-          </div>
+          <PhotoUpload
+            id="status-photo"
+            label="Photo proof for status change"
+            value={statusPhoto}
+            onChange={setStatusPhoto}
+            required
+            helpText="Take a current photo or choose one from your device (maximum 3 MB)."
+          />
           <div className="report-actions">
             <button disabled={Boolean(activeAction)} onClick={handleSupport}>
               {activeAction === "support" ? "Verifying…" : "Add Your Voice"}
             </button>
             <button
-              disabled={Boolean(activeAction) || !statusPhotoUrl.trim()}
+              disabled={Boolean(activeAction) || !statusPhoto}
               className="secondary"
               onClick={() => handleStatus("in_progress")}
             >
               {activeAction === "in_progress" ? "Verifying…" : "Still There"}
             </button>
             <button
-              disabled={Boolean(activeAction) || !statusPhotoUrl.trim()}
+              disabled={Boolean(activeAction) || !statusPhoto}
               className="secondary"
               onClick={() => handleStatus("fixed")}
             >
@@ -166,6 +170,13 @@ export default function ReportDetail() {
         <div className="card">
           <h2>Post an update</h2>
           <textarea rows="4" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Share what has changed on the ground..." />
+          <PhotoUpload
+            id="update-photo"
+            label="Update photo (optional)"
+            value={updatePhoto}
+            onChange={setUpdatePhoto}
+            helpText="Add a current image if it helps show what changed."
+          />
           <div style={{ marginTop: "10px" }}>
             <button onClick={handleUpdate} disabled={Boolean(activeAction)}>
               {activeAction === "update" ? "Verifying location…" : "Post Verified Update"}
@@ -183,6 +194,7 @@ export default function ReportDetail() {
                   <time>{new Date(item.created_at).toLocaleString()}</time>
                 </div>
                 <p>{item.note}</p>
+                {item.photo_url && <img className="timeline-proof-image" src={item.photo_url} alt="Photo proof attached to this update" />}
                 <small>
                   {item.actor_label}
                   {item.distance_km !== null && ` · verified ${Number(item.distance_km).toFixed(2)} km away`}

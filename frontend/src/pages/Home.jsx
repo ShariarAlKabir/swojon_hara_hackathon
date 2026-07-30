@@ -1,13 +1,32 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useSearchParams } from "react-router-dom";
 import api from "../api/api";
 import ReportList from "../components/ReportList";
 import MapView from "../components/MapView";
 import { REPORT_CATEGORIES } from "../constants/categories";
 
 export default function Home() {
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [reports, setReports] = useState([]);
-  const [filters, setFilters] = useState({ category: "", status: "", ward: "" });
+  const [filters, setFilters] = useState({
+    category: searchParams.get("category") || "",
+    status: searchParams.get("status") || "",
+    ward: searchParams.get("ward") || "",
+  });
+
+  useEffect(() => {
+    if (location.hash !== "#explore") return undefined;
+
+    const frameId = window.requestAnimationFrame(() => {
+      document.getElementById("explore")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
+  }, [location.hash]);
 
   useEffect(() => {
     let isCurrent = true;
